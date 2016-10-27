@@ -24,16 +24,16 @@ class Cpanel
   private $username;
 
   /**
-  * @var string Password or long hash of your whm server.
+  * @var string Password, API token or long hash of your whm server.
   * @since v1.0.0
   */
   private $password;
 
   /**
-  * @var string Authentication type you want to use. You can set as 'hash' or 'password'.
+  * @var string Authentication type: 'token', 'hash' or 'password'. Defaults to 'hash'.
   * @since v1.0.0
   */
-  private $auth_type;
+  private $auth_type = 'hash';
 
   /**
   * @var string Host of your whm server. You must set it with full host with its port and protocol.
@@ -42,41 +42,61 @@ class Cpanel
   private $host;
 
   /**
-  * @var string Sets of headers that will be sent at request.
-  * @since v1.0.0
+  * @var bool Whether to verify the server's SSL certificate. Defaults to true.
   */
-  protected $headers=array();
+  private $verify_ssl = true;
 
   /**
-  * Class constructor. The options must be contain username, host, and password
-  *
-  * @param string $options options that will be passed and processed
-  * @return object return as self-object
+  * @var int Request timeout in seconds.
+  */
+  private $timeout = 30;
+
+  /**
+  * @var array Sets of headers that will be sent at request.
   * @since v1.0.0
   */
-  public function __construct($options=array())
+  protected $headers = array();
+
+  /**
+  * Class constructor. The options must contain username, host, and password.
+  * Optional: auth_type ('token', 'hash' or 'password'), verify_ssl (bool), timeout (int seconds).
+  *
+  * @param array $options options that will be passed and processed
+  * @since v1.0.0
+  */
+  public function __construct($options = array())
   {
-    if(!empty($options))
-    {
-      if(!empty($options['auth_type']))
-        $this->setAuthType($options['auth_type']);
-      return $this->checkOptions($options)
-      ->setHost($options['host'])
+    if (empty($options))
+      return;
+
+    $this->checkOptions($options);
+
+    if (!empty($options['auth_type']))
+      $this->setAuthType($options['auth_type']);
+    if (isset($options['verify_ssl']))
+      $this->setVerifySsl($options['verify_ssl']);
+    if (isset($options['timeout']))
+      $this->setTimeout($options['timeout']);
+
+    $this->setHost($options['host'])
       ->setAuthorization($options['username'], $options['password']);
-    }
   }
 
   /**
-  * Magic method who will call the CPanel/WHM Api
+  * Magic method who will call the CPanel/WHM Api.
+  * Usage: $cpanel->createacct(['username' => 'foo', 'domain' => 'foo.com']);
   *
   * @param string $function function name that will be called
-  * @param array $arguments parameter that should be passed when calling API function
-  * @return array result of called functions
+  * @param array $arguments first element (optional) is an associative array of API parameters
+  * @return object result of called functions
   * @since v1.0.0
   */
-  public function __call($function, $arguments=[])
+  public function __call($function, $arguments = array())
   {
-    return $this->runQuery($function, $arguments);
+    $params = isset($arguments[0]) ? $arguments[0] : array();
+    if (!is_array($params))
+      throw new \InvalidArgumentException('API parameters must be passed as an associative array', 2306);
+    return $this->runQuery($function, $params);
   }
 
   /**
@@ -88,11 +108,11 @@ class Cpanel
   */
   private function checkOptions($options)
   {
-    if(empty($options['username']))
+    if (empty($options['username']))
       throw new \Exception('Username is not set', 2301);
-    if(empty($options['password']))
+    if (empty($options['password']))
       throw new \Exception('Password or hash is not set', 2302);
-    if(empty($options['host']))
+    if (empty($options['host']))
       throw new \Exception('CPanel Host is not set', 2303);
     return $this;
   }
@@ -102,8 +122,7 @@ class Cpanel
   * It only set 'username' and 'password'
   *
   * @param string $username Username of your whm server.
-  * @param string $password Password or long hash of your whm server.
-  * @access public
+  * @param string $password Password, API token or long hash of your whm server.
   * @return object return as self-object
   * @since v1.0.0
   */
@@ -118,27 +137,51 @@ class Cpanel
   * set API Host.
   *
   * @param string $host Host of your whm server.
-  * @access public
   * @return object return as self-object
   * @since v1.0.0
   */
   public function setHost($host)
   {
-    $this->host = $host;
+    $this->host = rtrim($host, '/');
     return $this;
   }
 
   /**
   * set Authentication Type.
   *
-  * @param string $auth_type Authentication type for calling API.
-  * @access public
+  * @param string $auth_type 'token', 'hash' or 'password'
   * @return object return as self-object
   * @since v1.0.0
   */
   public function setAuthType($auth_type)
   {
+    if (!in_array($auth_type, array('token', 'hash', 'password'), true))
+      throw new \InvalidArgumentException("Unsupported auth_type '$auth_type'. Use 'token', 'hash' or 'password'", 2304);
     $this->auth_type = $auth_type;
+    return $this;
+  }
+
+  /**
+  * Enable or disable SSL certificate verification. Only disable for testing against self-signed servers.
+  *
+  * @param bool $verify
+  * @return object return as self-object
+  */
+  public function setVerifySsl($verify)
+  {
+    $this->verify_ssl = (bool) $verify;
+    return $this;
+  }
+
+  /**
+  * set request timeout in seconds.
+  *
+  * @param int $timeout
+  * @return object return as self-object
+  */
+  public function setTimeout($timeout)
+  {
+    $this->timeout = (int) $timeout;
     return $this;
   }
 
@@ -150,7 +193,7 @@ class Cpanel
   * @return object return as self-object
   * @since v1.0.0
   */
-  public function setHeader($name, $value='')
+  public function setHeader($name, $value = '')
   {
     $this->headers[$name] = $value;
     return $this;
@@ -179,7 +222,7 @@ class Cpanel
   }
 
   /**
-  * get password or long hash.
+  * get password, API token or long hash.
   *
   * @return string get password or long hash
   * @since v1.0.0
@@ -201,22 +244,40 @@ class Cpanel
   }
 
   /**
+  * get whether SSL certificates are verified.
+  *
+  * @return bool
+  */
+  public function getVerifySsl()
+  {
+    return $this->verify_ssl;
+  }
+
+  /**
   * extend http headers that will be sent.
   *
   * @return array list of headers that will be sent
   * @since v1.0.0
   */
-  private function createHeader()
+  protected function createHeader()
   {
     $headers = $this->headers;
 
     $username = $this->getUsername();
-    $auth_type = $this->getAuthType();
+    $secret = preg_replace("/[\r\n]/", '', (string) $this->getPassword());
 
-    if('hash' == $auth_type)
-      $headers['Authorization'] = 'WHM '.$username.':'. preg_replace("'(\r|\n)'","",$this->getPassword());
-    elseif('password' == $auth_type)
-      $headers['Authorization'] = 'Basic '.$username.':'. preg_replace("'(\r|\n)'","",$this->getPassword());
+    switch ($this->getAuthType())
+    {
+      case 'token':
+        $headers['Authorization'] = 'whm '.$username.':'.$secret;
+        break;
+      case 'hash':
+        $headers['Authorization'] = 'WHM '.$username.':'.$secret;
+        break;
+      case 'password':
+        $headers['Authorization'] = 'Basic '.base64_encode($username.':'.$secret);
+        break;
+    }
 
     return $headers;
   }
@@ -225,28 +286,66 @@ class Cpanel
   * The executor. It will run API function and get the data
   *
   * @param string $action function name that will be called.
-  * @param string $arguments list of parameters that will be attached.
-  * @return array results of API call
+  * @param array $params associative array of API parameters.
+  * @return object results of API call
+  * @throws \RuntimeException on transport, HTTP or JSON errors
   * @since v1.0.0
   */
-	protected function runQuery($action, $arguments)
-	{
-        $host = $this->getHost();
-        $url = $host.'/json-api/'.$action;
-        $headers = [];
-        foreach ($this->createHeader() as $header_key => $header_value) $headers[] = "$header_key: $header_value";
-        $fields=[];
-        $fields = (is_array($fields)) ? http_build_query($fields) : $fields;
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        //  curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
-        $result = curl_exec($ch);
-        curl_close($ch);
-        return json_decode($result);
-	}
+  protected function runQuery($action, $params = array())
+  {
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $action))
+      throw new \InvalidArgumentException("Invalid API function name '$action'", 2305);
+
+    $url = $this->getHost().'/json-api/'.$action;
+    $headers = array();
+    foreach ($this->createHeader() as $header_key => $header_value)
+      $headers[] = "$header_key: $header_value";
+
+    $response = $this->sendRequest($url, $headers, http_build_query($params));
+
+    if ($response['status'] < 200 || $response['status'] >= 300)
+      throw new \RuntimeException("cPanel API '$action' returned HTTP {$response['status']}: ".substr($response['body'], 0, 500), $response['status']);
+
+    $result = json_decode($response['body']);
+    if (json_last_error() !== JSON_ERROR_NONE)
+      throw new \RuntimeException("cPanel API '$action' returned invalid JSON: ".json_last_error_msg(), 2308);
+
+    return $result;
+  }
+
+  /**
+  * Send the HTTP request. Override in a subclass to mock the transport in tests.
+  *
+  * @param string $url
+  * @param array $headers list of "Name: value" header lines
+  * @param string $body url-encoded request body
+  * @return array ['status' => int, 'body' => string]
+  * @throws \RuntimeException when the request cannot be completed
+  */
+  protected function sendRequest($url, array $headers, $body)
+  {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $this->verify_ssl);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $this->verify_ssl ? 2 : 0);
+
+    $result = curl_exec($ch);
+    if ($result === false)
+    {
+      $error = curl_error($ch);
+      $errno = curl_errno($ch);
+      curl_close($ch);
+      throw new \RuntimeException("cPanel API request failed (cURL error $errno): $error", 2307);
+    }
+
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return array('status' => $status, 'body' => $result);
+  }
 }
