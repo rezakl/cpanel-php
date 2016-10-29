@@ -1,5 +1,5 @@
 <?php
-use Fafan\CpanelPhp\Cpanel;
+use Rezakl\CpanelPhp\Cpanel;
 use PHPUnit\Framework\TestCase;
 
 /**

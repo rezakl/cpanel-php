@@ -4,15 +4,14 @@
  *
 */
 
-namespace Fafan\CpanelPhp;
+namespace Rezakl\CpanelPhp;
 
 /**
  * Provides easy to use class for calling some CPanel/WHM API functions
  *
- * @author Fafan <fafan.art@gmail.com>
+ * @author Rezakl
  * @version v1.0.0
- * @package Fafan\CpanelPhp
- * @link https://github.com/fafan/cpanel-php
+ * @package Rezakl\CpanelPhp
  * @since v1.0.0
 */
 class Cpanel

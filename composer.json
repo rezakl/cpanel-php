@@ -1,11 +1,11 @@
 {
-    "name": "gufy/cpanel-php",
-    "description": "Cpanel/WHM API for PHP",
+    "name": "rezakl/cpanel-php",
+    "description": "Lightweight cURL-based client for the cPanel/WHM JSON API",
     "license": "MIT",
+    "keywords": ["cpanel", "whm", "api", "hosting"],
     "authors": [
         {
-            "name": "Fafan",
-            "email": "fafan.art@gmail.com"
+            "name": "Rezakl"
         }
     ],
     "require": {
@@ -18,7 +18,7 @@
     },
     "autoload": {
         "psr-0": {
-            "Fafan\\CpanelPhp\\": "src/"
+            "Rezakl\\CpanelPhp\\": "src/"
         }
     },
     "minimum-stability": "stable"
