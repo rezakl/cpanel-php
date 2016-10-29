@@ -1,102 +1,155 @@
-[![Code Climate](https://codeclimate.com/github/fafan/cpanel-php/badges/gpa.svg)](https://codeclimate.com/github/fafan/cpanel-php)
-[![Test Coverage](https://codeclimate.com/github/fafan/cpanel-php/badges/coverage.svg)](https://codeclimate.com/github/fafan/cpanel-php/coverage)
-[![Issue Count](https://codeclimate.com/github/fafan/cpanel-php/badges/issue_count.svg)](https://codeclimate.com/github/fafan/cpanel-php)
-# CPanel/WHM API for PHP library
+# cPanel/WHM API for PHP
 
+A lightweight, dependency-free PHP client for the cPanel/WHM JSON API, built on cURL.
 
-NOTE: This library is modified from original code of gufy/cpanel-php
-
-I rewrite runQuery() function to use cURL instead of GuzzleHttp
-
+- Call any WHM API function as a method: `$cpanel->listaccts()`
+- API token, access hash and password authentication
+- SSL certificate verification on by default
+- Clear exceptions for network, HTTP and JSON errors
 
 ## Contents
+
+- [Requirements](#requirements)
 - [Installation](#installation)
-- [Usage](#usage)
-- [Functions](#functions)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Calling the API](#calling-the-api)
+- [Error handling](#error-handling)
+- [Testing](#testing)
 - [Credits](#credits)
 
-### Installation
+## Requirements
 
-To install this package, you can run this code via your terminal
+- PHP 5.5 or later
+- `curl` and `json` extensions
+
+## Installation
+
 ```shell
-	composer require fafan/cpanel-php
+composer require rezakl/cpanel-php
 ```
 
-Or update your `composer.json` by adding this line
-```json
-	"fafan/cpanel-php":"^0.1"
+## Quick start
+
+```php
+<?php
+use Rezakl\CpanelPhp\Cpanel;
+
+$cpanel = new Cpanel([
+    'host'      => 'https://whm.example.com:2087',
+    'username'  => 'root',
+    'auth_type' => 'token',
+    'password'  => 'YOUR_API_TOKEN',
+]);
+
+$accounts = $cpanel->listaccts();
 ```
 
-Then, run this code
+## Configuration
+
+### Constructor options
+
+| Option       | Required | Default  | Description                                                       |
+|--------------|----------|----------|-------------------------------------------------------------------|
+| `host`       | Yes      |          | Full URL with protocol and port, e.g. `https://whm.example.com:2087` |
+| `username`   | Yes      |          | WHM username, usually `root`                                      |
+| `password`   | Yes      |          | API token, access hash or password, depending on `auth_type`      |
+| `auth_type`  | No       | `'hash'` | `'token'`, `'hash'` or `'password'`                               |
+| `verify_ssl` | No       | `true`   | Verify the server's SSL certificate                               |
+| `timeout`    | No       | `30`     | Request timeout in seconds                                        |
+
+### Authentication types
+
+| `auth_type`  | Header sent                         | Notes                                              |
+|--------------|-------------------------------------|----------------------------------------------------|
+| `'token'`    | `Authorization: whm user:token`     | **Recommended.** Create tokens in WHM under *Development › Manage API Tokens*. |
+| `'hash'`     | `Authorization: WHM user:hash`      | Legacy access hash; removed in recent cPanel versions. |
+| `'password'` | `Authorization: Basic base64(user:pass)` | Plain account password.                      |
+
+> **Note:** Only set `verify_ssl` to `false` for test servers with self-signed certificates.
+> Disabling it in production exposes your credentials to interception.
+
+### Changing configuration later
+
+Every setter returns the instance, so calls can be chained.
+
+```php
+$cpanel
+    ->setHost('https://whm2.example.com:2087')
+    ->setAuthorization('root', 'NEW_API_TOKEN')
+    ->setAuthType('token')
+    ->setVerifySsl(true)
+    ->setTimeout(60)
+    ->setHeader('X-Custom-Header', 'value');
+```
+
+### Reading configuration
+
+```php
+$cpanel->getHost();
+$cpanel->getUsername();
+$cpanel->getPassword();
+$cpanel->getAuthType();
+$cpanel->getVerifySsl();
+```
+
+## Calling the API
+
+Any method you call on the client is sent to `{host}/json-api/{method}`. Pass API parameters as an
+associative array:
+
+```php
+// No parameters
+$accounts = $cpanel->listaccts();
+
+// With parameters
+$result = $cpanel->createacct([
+    'username' => 'foo',
+    'domain'   => 'foo.com',
+    'plan'     => 'default',
+]);
+```
+
+Responses are returned as decoded JSON objects (`stdClass`):
+
+```php
+foreach ($cpanel->listaccts()->acct as $account) {
+    echo $account->user, ' - ', $account->domain, PHP_EOL;
+}
+```
+
+See the [WHM API documentation](https://api.docs.cpanel.net/whm/introduction) for available functions and their parameters.
+
+## Error handling
+
+| Exception                   | Thrown when                                                    |
+|-----------------------------|----------------------------------------------------------------|
+| `\RuntimeException`         | The request fails (network or SSL error), the server returns a non-2xx status (the exception code is the HTTP status), or the response is not valid JSON |
+| `\InvalidArgumentException` | `auth_type` is unsupported, the function name is invalid, or parameters are not an array |
+| `\Exception`                | A required constructor option (`host`, `username`, `password`) is missing |
+
+```php
+try {
+    $accounts = $cpanel->listaccts();
+} catch (\RuntimeException $e) {
+    error_log('WHM API error: ' . $e->getMessage());
+}
+```
+
+## Testing
+
 ```shell
-	composer update
+composer install
+vendor/bin/phpunit
 ```
 
-### Usage
+The tests mock the HTTP layer and never contact a real server.
 
-For example, if you would like to get list accounts of your whm server, you can do this.
+## Credits
 
-```php
-  <?php
-  $cpanel = new \Fafan\CpanelPhp\Cpanel([
-      'host'        =>  'https://123.456.789.123:2087', // ip or domain complete with its protocol and port
-      'username'    =>  'root', // username of your server, it usually root.
-      'auth_type'   =>  'hash', // set 'hash' or 'password'
-      'password'    =>  'password', // long hash or your user's password
-  ]);
+- Original library: [gufy/cpanel-php](https://github.com/mgufrone/cpanel-php) by Mochamad Gufron
+- cURL rewrite: Fafan
 
-  $accounts = $cpanel->listaccts(); // it will returned as array
+## License
 
-```
-
-### Functions
-
-This is the example when you want to define your configuration while creating new object
-
-```php
-  <?php
-  $cpanel = new \Fafan\CpanelPhp\Cpanel([
-      'host'        =>  'https://123.456.789.123:2087', // required
-      'username'    =>  'root', // required
-      'auth_type'   =>  'hash', // optional, default 'hash'
-      'password'    =>  'password', // required
-  ]);
-```
-
-Somehow, you want to override your current configuration. To do this, here is the code
-
-```php
-  <?php
-  // change username andd (password or hash)
-  $cpanel->setAuthorization($username, $password);
-
-  // change host
-  $cpanel->setHost($host);
-
-  // change authentication type
-  $cpanel->setAuthType($auth_type);
-```
-
-#### Get defined configuration
-After you define some of your configuration, you can get it again by calling this functions
-
-```php
-  <?php
-  // get username
-  $cpanel->getUsername();
-
-  // get password
-  $cpanel->getPassword();
-
-  // get authentication type
-  $cpanel->getAuthType();
-
-  // get host
-  $cpanel->getHost();
-```
-
-#### Credits
-
-Original code: gufy/cpanel-php, version 1.0
-
-By Mochamad Gufron <mgufronefendi@gmail.com>
+MIT
